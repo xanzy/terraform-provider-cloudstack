@@ -143,6 +143,8 @@ func resourceCloudStackVPNCustomerGatewayRead(d *schema.ResourceData, meta inter
 	d.Set("esp_lifetime", int(v.Esplifetime))
 	d.Set("ike_lifetime", int(v.Ikelifetime))
 
+	setValueOrID(d, "project", v.Project, v.Projectid)
+
 	return nil
 }
 
