@@ -49,8 +49,8 @@ The following arguments are supported:
 * `ike_lifetime` - (Optional) The IKE lifetime of phase 2 VPN connection to this
     VPN Customer Gateway in seconds (defaults 86400)
 
-* `project` - (Optional) The name or ID of the project to deploy this
-    instance to. Changing this forces a new resource to be created.
+* `project` - (Optional) The name or ID of the project to create this VPN Customer
+    Gateway in. Changing this forces a new resource to be created.
 
 ## Attributes Reference
 
