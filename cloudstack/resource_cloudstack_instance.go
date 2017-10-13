@@ -549,7 +549,7 @@ func resourceCloudStackInstanceUpdate(d *schema.ResourceData, meta interface{}) 
 	// Update tags if they have changed
 	err := updateTags(cs, d, "userVm")
 	if err != nil {
-		return fmt.Errorf("Error setting tags on the instance %s: %s", name, err)
+		return fmt.Errorf("Error updating tags on the instance %s: %s", name, err)
 	}
 
 	return resourceCloudStackInstanceRead(d, meta)

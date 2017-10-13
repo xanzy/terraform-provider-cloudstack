@@ -68,6 +68,8 @@ func resourceCloudStackDisk() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 			},
+
+			"tags": tagsSchema(),
 		},
 	}
 }
@@ -120,7 +122,7 @@ func resourceCloudStackDiskCreate(d *schema.ResourceData, meta interface{}) erro
 	// Put tags if necessary
 	err = setTags(cs, d, "Volume")
 	if err != nil {
-		return fmt.Errorf("Error setting tags on the new instance %s: %s", name, err)
+		return fmt.Errorf("Error setting tags on the new disk %s: %s", name, err)
 	}
 
 	d.SetPartial("name")
@@ -254,7 +256,7 @@ func resourceCloudStackDiskUpdate(d *schema.ResourceData, meta interface{}) erro
 	// Update tags if they have changed
 	err := updateTags(cs, d, "Volume")
 	if err != nil {
-		return fmt.Errorf("Error setting tags on the disk %s: %s", name, err)
+		return fmt.Errorf("Error updating tags on the disk %s: %s", name, err)
 	}
 
 	return resourceCloudStackDiskRead(d, meta)
