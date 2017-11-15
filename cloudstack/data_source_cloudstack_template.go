@@ -1,6 +1,7 @@
 package cloudstack
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/xanzy/go-cloudstack/cloudstack"
@@ -13,10 +14,7 @@ func dataSourceCloudstackTemplate() *schema.Resource {
 	return &schema.Resource{
 		Read: dataSourceCloudstackTemplateRead,
 		Schema: map[string]*schema.Schema{
-			"displaytext_regex": {
-				Type:     schema.TypeString,
-				Required: true,
-			},
+			"filter": dataSourceFiltersSchema(),
 			"templatefilter": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -69,16 +67,20 @@ func dataSourceCloudstackTemplateRead(d *schema.ResourceData, meta interface{}) 
 	if err != nil {
 		log.Printf("[ERROR] Failed to list templates: %s", err)
 	}
-	r := regexp.MustCompile(d.Get("displaytext_regex").(string))
+
+	filters, filtersOk := d.GetOk("filter")
+	var template *cloudstack.Template
 	var templates []*cloudstack.Template
 
-	for _, t := range csTemplates.Templates {
-		if r.Match([]byte(t.Displaytext)) {
-			templates = append(templates, t)
+	if filtersOk {
+		for _, t := range csTemplates.Templates {
+			if applyFilters(t, filters.(*schema.Set)) {
+				templates = append(templates, t)
+			}
 		}
+	} else {
+		return fmt.Errorf("No specified filter, too many results.")
 	}
-
-	var template *cloudstack.Template
 
 	if len(templates) > 1 {
 		template = mostRecentTemplate(templates)
@@ -87,6 +89,8 @@ func dataSourceCloudstackTemplateRead(d *schema.ResourceData, meta interface{}) 
 	} else {
 		return fmt.Errorf("No template is matching with the specified regex.\n")
 	}
+
+	log.Printf("[DEBUG] Selected template: %s\n", template.Displaytext)
 	return templateDescriptionAttributes(d, template)
 }
 
@@ -119,6 +123,22 @@ func mostRecentTemplate(templates []*cloudstack.Template) *cloudstack.Template {
 		}
 	}
 
-	log.Printf("[DEBUG] Most recent template selected: %+v\n", templates[mrt])
 	return templates[mrt]
+}
+
+func applyFilters(template *cloudstack.Template, filters *schema.Set) bool {
+	var templateJSON map[string]interface{}
+	t, _ := json.Marshal(template)
+	json.Unmarshal(t, &templateJSON)
+
+	for _, f := range filters.List() {
+		m := f.(map[string]interface{})
+		r := regexp.MustCompile(m["value"].(string))
+		templateField := templateJSON[m["name"].(string)].(string)
+		if !r.Match([]byte(templateField)) {
+			return false
+		}
+
+	}
+	return true
 }
