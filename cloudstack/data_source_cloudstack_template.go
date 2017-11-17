@@ -15,7 +15,7 @@ func dataSourceCloudstackTemplate() *schema.Resource {
 		Read: dataSourceCloudstackTemplateRead,
 		Schema: map[string]*schema.Schema{
 			"filter": dataSourceFiltersSchema(),
-			"templatefilter": {
+			"template_filter": {
 				Type:     schema.TypeString,
 				Required: true,
 			},
@@ -33,7 +33,7 @@ func dataSourceCloudstackTemplate() *schema.Resource {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
-			"displaytext": {
+			"display_text": {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
@@ -60,12 +60,14 @@ func dataSourceCloudstackTemplate() *schema.Resource {
 
 func dataSourceCloudstackTemplateRead(d *schema.ResourceData, meta interface{}) error {
 	cs := meta.(*cloudstack.CloudStackClient)
-	ltp := cloudstack.ListTemplatesParams{}
-	ltp.SetListall(true)
-	ltp.SetTemplatefilter(d.Get("templatefilter").(string))
-	csTemplates, err := cs.Template.ListTemplates(&ltp)
+
+	p := cloudstack.ListTemplatesParams{}
+
+	p.SetListall(true)
+	p.SetTemplatefilter(d.Get("template_filter").(string))
+	csTemplates, err := cs.Template.ListTemplates(&p)
 	if err != nil {
-		log.Printf("[ERROR] Failed to list templates: %s", err)
+		return fmt.Errorf("Failed to list templates: %s", err)
 	}
 
 	filters, filtersOk := d.GetOk("filter")
@@ -74,7 +76,12 @@ func dataSourceCloudstackTemplateRead(d *schema.ResourceData, meta interface{}) 
 
 	if filtersOk {
 		for _, t := range csTemplates.Templates {
-			if applyFilters(t, filters.(*schema.Set)) {
+			match, err := applyFilters(t, filters.(*schema.Set))
+			if err != nil {
+				return err
+			}
+
+			if match {
 				templates = append(templates, t)
 			}
 		}
@@ -83,7 +90,10 @@ func dataSourceCloudstackTemplateRead(d *schema.ResourceData, meta interface{}) 
 	}
 
 	if len(templates) > 1 {
-		template = mostRecentTemplate(templates)
+		template, err = latestTemplate(templates)
+		if err != nil {
+			return err
+		}
 	} else if len(templates) == 1 {
 		template = templates[0]
 	} else {
@@ -99,7 +109,7 @@ func templateDescriptionAttributes(d *schema.ResourceData, template *cloudstack.
 	d.Set("template_id", template.Id)
 	d.Set("account", template.Account)
 	d.Set("created", template.Created)
-	d.Set("displaytext", template.Displaytext)
+	d.Set("display_text", template.Displaytext)
 	d.Set("format", template.Format)
 	d.Set("hypervisor", template.Hypervisor)
 	d.Set("name", template.Name)
@@ -108,37 +118,43 @@ func templateDescriptionAttributes(d *schema.ResourceData, template *cloudstack.
 	return nil
 }
 
-func mostRecentTemplate(templates []*cloudstack.Template) *cloudstack.Template {
-	var mrt int
-	mostRecent := int64(0)
-	for k, t := range templates {
+func latestTemplate(templates []*cloudstack.Template) (*cloudstack.Template, error) {
+	var latest *time.Time
+	var template *cloudstack.Template
+
+	for _, t := range templates {
 		created, err := time.Parse("2006-01-02T15:04:05-0700", t.Created)
 		if err != nil {
-			panic(err)
+			return nil, fmt.Errorf("Failed to parse creation date of a template: %s", err)
 		}
 
-		if created.Unix() > mostRecent {
-			mostRecent = created.Unix()
-			mrt = k
+		if latest == nil || created.After(*latest) {
+			latest = &created
+			template = t
 		}
 	}
 
-	return templates[mrt]
+	return template, nil
 }
 
-func applyFilters(template *cloudstack.Template, filters *schema.Set) bool {
+func applyFilters(template *cloudstack.Template, filters *schema.Set) (bool, error) {
 	var templateJSON map[string]interface{}
 	t, _ := json.Marshal(template)
 	json.Unmarshal(t, &templateJSON)
 
 	for _, f := range filters.List() {
 		m := f.(map[string]interface{})
-		r := regexp.MustCompile(m["value"].(string))
+
+		r, err := regexp.Compile(m["value"].(string))
+		if err != nil {
+			return false, fmt.Errorf("Invalid regex: %s", err)
+		}
+
 		templateField := templateJSON[m["name"].(string)].(string)
-		if !r.Match([]byte(templateField)) {
-			return false
+		if !r.MatchString(templateField) {
+			return false, nil
 		}
 
 	}
-	return true
+	return true, nil
 }
