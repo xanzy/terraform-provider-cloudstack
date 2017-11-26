@@ -57,6 +57,12 @@ func resourceCloudStackLoadBalancerRule() *schema.Resource {
 				ForceNew: true,
 			},
 
+			"protocol": &schema.Schema{
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
+
 			"member_ids": &schema.Schema{
 				Type:     schema.TypeSet,
 				Required: true,
@@ -102,6 +108,11 @@ func resourceCloudStackLoadBalancerRuleCreate(d *schema.ResourceData, meta inter
 		p.SetNetworkid(networkid.(string))
 	}
 
+	// Set the protocol
+	if protocol, ok := d.GetOk("protocol"); ok {
+		p.SetProtocol(protocol.(string))
+	}
+
 	// Set the ipaddress id
 	p.SetPublicipid(d.Get("ip_address_id").(string))
 
@@ -120,6 +131,7 @@ func resourceCloudStackLoadBalancerRuleCreate(d *schema.ResourceData, meta inter
 	d.SetPartial("algorithm")
 	d.SetPartial("private_port")
 	d.SetPartial("public_port")
+	d.SetPartial("protocol")
 
 	// Create a new parameter struct
 	ap := cs.LoadBalancer.NewAssignToLoadBalancerRuleParams(r.Id)
@@ -168,6 +180,11 @@ func resourceCloudStackLoadBalancerRuleRead(d *schema.ResourceData, meta interfa
 	// Only set network if user specified it to avoid spurious diffs
 	if _, ok := d.GetOk("network_id"); ok {
 		d.Set("network_id", lb.Networkid)
+	}
+
+	// Only set protocol if user specified it to avoid spurious diffs
+	if _, ok := d.GetOk("protocol"); ok {
+		d.Set("protocol", lb.Protocol)
 	}
 
 	setValueOrID(d, "project", lb.Project, lb.Projectid)
