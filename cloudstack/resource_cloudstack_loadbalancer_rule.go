@@ -61,6 +61,7 @@ func resourceCloudStackLoadBalancerRule() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
+				Computed: true,
 			},
 
 			"member_ids": &schema.Schema{
@@ -176,15 +177,11 @@ func resourceCloudStackLoadBalancerRuleRead(d *schema.ResourceData, meta interfa
 	d.Set("public_port", lb.Publicport)
 	d.Set("private_port", lb.Privateport)
 	d.Set("ip_address_id", lb.Publicipid)
+	d.Set("protocol", lb.Protocol)
 
 	// Only set network if user specified it to avoid spurious diffs
 	if _, ok := d.GetOk("network_id"); ok {
 		d.Set("network_id", lb.Networkid)
-	}
-
-	// Only set protocol if user specified it to avoid spurious diffs
-	if _, ok := d.GetOk("protocol"); ok {
-		d.Set("protocol", lb.Protocol)
 	}
 
 	setValueOrID(d, "project", lb.Project, lb.Projectid)
