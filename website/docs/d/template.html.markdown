@@ -30,7 +30,7 @@ data "cloudstack_template" "my_template" {
 
 ### Argument Reference
 
-* `templatefilter` - (Required) The template filter (see the [Cloudstack documentation](https://cloudstack.apache.org/api/apidocs-4.9/apis/listTemplates.html))
+* `template_filter` - (Required) The template filter. Possible values are `featured`, `self`, `selfexecutable`, `sharedexecutable`, `executable` and `community` (see the Cloudstack API *listTemplate* command documentation).
 
 * `filter` - (Required) One or more name/value pairs to filter off of. You can apply filters on any exported attributes.
 
