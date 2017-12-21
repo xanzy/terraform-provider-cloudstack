@@ -317,6 +317,24 @@ func resourceCloudStackInstanceRead(d *schema.ResourceData, meta interface{}) er
 		d.Set("ip_address", vm.Nic[0].Ipaddress)
 	}
 
+	// Create a new param struct.
+	p := cs.Volume.NewListVolumesParams()
+	p.SetType("ROOT")
+	p.SetVirtualmachineid(d.Id())
+
+	// Get the root disk of the instance.
+	l, err := cs.Volume.ListVolumes(p)
+	if err != nil {
+		return err
+	}
+
+	// If we found the root disk, then update it's size.
+	if len(l.Volumes) != 1 {
+		log.Printf("[DEBUG] Failed to find root disk of instance: %s", vm.Name)
+	} else {
+		d.Set("root_disk_size", l.Volumes[0].Size)
+	}
+
 	if _, ok := d.GetOk("affinity_group_ids"); ok {
 		groups := &schema.Set{F: schema.HashString}
 		for _, group := range vm.Affinitygroup {
