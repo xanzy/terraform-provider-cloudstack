@@ -3,6 +3,7 @@ package cloudstack
 import (
 	"fmt"
 	"log"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,7 +35,7 @@ func resourceCloudStackNetworkACLRule() *schema.Resource {
 			},
 
 			"rule": &schema.Schema{
-				Type:     schema.TypeSet,
+				Type:     schema.TypeList,
 				Optional: true,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
@@ -114,11 +115,11 @@ func resourceCloudStackNetworkACLRuleCreate(d *schema.ResourceData, meta interfa
 	d.SetId(d.Get("acl_id").(string))
 
 	// Create all rules that are configured
-	if nrs := d.Get("rule").(*schema.Set); nrs.Len() > 0 {
-		// Create an empty rule set to hold all newly created rules
-		rules := resourceCloudStackNetworkACLRule().Schema["rule"].ZeroValue().(*schema.Set)
+	if nrs := d.Get("rule").([]interface{}); len(nrs) > 0 {
+		// Create an empty list to hold all newly created rules
+		var rules []interface{}
 
-		err := createNetworkACLRules(d, meta, rules, nrs)
+		err := createNetworkACLRules(d, meta, &rules, nrs)
 
 		// We need to update this first to preserve the correct state
 		d.Set("rule", rules)
@@ -131,27 +132,32 @@ func resourceCloudStackNetworkACLRuleCreate(d *schema.ResourceData, meta interfa
 	return resourceCloudStackNetworkACLRuleRead(d, meta)
 }
 
-func createNetworkACLRules(d *schema.ResourceData, meta interface{}, rules *schema.Set, nrs *schema.Set) error {
+var index int
+
+func createNetworkACLRules(d *schema.ResourceData, meta interface{}, rules *[]interface{}, nrs []interface{}) error {
 	var errs *multierror.Error
 
 	var wg sync.WaitGroup
-	wg.Add(nrs.Len())
+	wg.Add(len(nrs))
 
+	index = 1
 	sem := make(chan struct{}, d.Get("parallelism").(int))
-	for _, rule := range nrs.List() {
+	for _, rule := range nrs {
+		rule := rule.(map[string]interface{})
+
 		// Put in a tiny sleep here to avoid DoS'ing the API
 		time.Sleep(500 * time.Millisecond)
 
-		go func(rule map[string]interface{}) {
+		go func(index int, rule map[string]interface{}) {
 			defer wg.Done()
 			sem <- struct{}{}
 
 			// Create a single rule
-			err := createNetworkACLRule(d, meta, rule)
+			err := createNetworkACLRule(d, meta, index, rule)
 
 			// If we have at least one UUID, we need to save the rule
 			if len(rule["uuids"].(map[string]interface{})) > 0 {
-				rules.Add(rule)
+				*rules = append(*rules, rule)
 			}
 
 			if err != nil {
@@ -159,7 +165,9 @@ func createNetworkACLRules(d *schema.ResourceData, meta interface{}, rules *sche
 			}
 
 			<-sem
-		}(rule.(map[string]interface{}))
+		}(index, rule)
+
+		index += rule["ports"].(*schema.Set).Len()
 	}
 
 	wg.Wait()
@@ -167,7 +175,7 @@ func createNetworkACLRules(d *schema.ResourceData, meta interface{}, rules *sche
 	return errs.ErrorOrNil()
 }
 
-func createNetworkACLRule(d *schema.ResourceData, meta interface{}, rule map[string]interface{}) error {
+func createNetworkACLRule(d *schema.ResourceData, meta interface{}, index int, rule map[string]interface{}) error {
 	cs := meta.(*cloudstack.CloudStackClient)
 	uuids := rule["uuids"].(map[string]interface{})
 
@@ -197,6 +205,7 @@ func createNetworkACLRule(d *schema.ResourceData, meta interface{}, rule map[str
 
 	// If the protocol is ICMP set the needed ICMP parameters
 	if rule["protocol"].(string) == "icmp" {
+		p.SetNumber(index)
 		p.SetIcmptype(rule["icmp_type"].(int))
 		p.SetIcmpcode(rule["icmp_code"].(int))
 
@@ -211,6 +220,8 @@ func createNetworkACLRule(d *schema.ResourceData, meta interface{}, rule map[str
 
 	// If the protocol is ALL set the needed parameters
 	if rule["protocol"].(string) == "all" {
+		p.SetNumber(index)
+
 		r, err := Retry(4, retryableACLCreationFunc(cs, p))
 		if err != nil {
 			return err
@@ -227,7 +238,7 @@ func createNetworkACLRule(d *schema.ResourceData, meta interface{}, rule map[str
 			// Create an empty schema.Set to hold all processed ports
 			ports := &schema.Set{F: schema.HashString}
 
-			for _, port := range ps.List() {
+			for i, port := range ps.List() {
 				if _, ok := uuids[port.(string)]; ok {
 					ports.Add(port)
 					rule["ports"] = ports
@@ -249,6 +260,7 @@ func createNetworkACLRule(d *schema.ResourceData, meta interface{}, rule map[str
 					}
 				}
 
+				p.SetNumber(index + i)
 				p.SetStartport(startPort)
 				p.SetEndport(endPort)
 
@@ -304,17 +316,19 @@ func resourceCloudStackNetworkACLRuleRead(d *schema.ResourceData, meta interface
 		ruleMap[r.Id] = r
 	}
 
-	// Create an empty schema.Set to hold all rules
-	rules := resourceCloudStackNetworkACLRule().Schema["rule"].ZeroValue().(*schema.Set)
+	// Create an empty list to hold all rules
+	var rules []interface{}
 
 	// Read all rules that are configured
-	if rs := d.Get("rule").(*schema.Set); rs.Len() > 0 {
-		for _, rule := range rs.List() {
-			rule := rule.(map[string]interface{})
-			uuids := rule["uuids"].(map[string]interface{})
+	if rs := d.Get("rule").([]interface{}); len(rs) > 0 {
+		for _, rule := range rs {
+			rule, ok := rule.(map[string]interface{})
+			if !ok {
+				continue
+			}
 
 			if rule["protocol"].(string) == "icmp" {
-				id, ok := uuids["icmp"]
+				id, ok := rule["uuids"].(map[string]interface{})["icmp"]
 				if !ok {
 					continue
 				}
@@ -322,7 +336,6 @@ func resourceCloudStackNetworkACLRuleRead(d *schema.ResourceData, meta interface
 				// Get the rule
 				r, ok := ruleMap[id.(string)]
 				if !ok {
-					delete(uuids, "icmp")
 					continue
 				}
 
@@ -337,16 +350,17 @@ func resourceCloudStackNetworkACLRuleRead(d *schema.ResourceData, meta interface
 
 				// Update the values
 				rule["action"] = strings.ToLower(r.Action)
+				rule["cidr_list"] = cidrs
 				rule["protocol"] = r.Protocol
 				rule["icmp_type"] = r.Icmptype
 				rule["icmp_code"] = r.Icmpcode
 				rule["traffic_type"] = strings.ToLower(r.Traffictype)
-				rule["cidr_list"] = cidrs
-				rules.Add(rule)
+				rule["uuids"] = map[string]interface{}{"icmp": id}
+				rules = append(rules, rule)
 			}
 
 			if rule["protocol"].(string) == "all" {
-				id, ok := uuids["all"]
+				id, ok := rule["uuids"].(map[string]interface{})["all"]
 				if !ok {
 					continue
 				}
@@ -354,7 +368,6 @@ func resourceCloudStackNetworkACLRuleRead(d *schema.ResourceData, meta interface
 				// Get the rule
 				r, ok := ruleMap[id.(string)]
 				if !ok {
-					delete(uuids, "all")
 					continue
 				}
 
@@ -369,10 +382,11 @@ func resourceCloudStackNetworkACLRuleRead(d *schema.ResourceData, meta interface
 
 				// Update the values
 				rule["action"] = strings.ToLower(r.Action)
+				rule["cidr_list"] = cidrs
 				rule["protocol"] = r.Protocol
 				rule["traffic_type"] = strings.ToLower(r.Traffictype)
-				rule["cidr_list"] = cidrs
-				rules.Add(rule)
+				rule["uuids"] = map[string]interface{}{"all": id}
+				rules = append(rules, rule)
 			}
 
 			// If protocol is tcp or udp, loop through all ports
@@ -382,9 +396,12 @@ func resourceCloudStackNetworkACLRuleRead(d *schema.ResourceData, meta interface
 					// Create an empty schema.Set to hold all ports
 					ports := &schema.Set{F: schema.HashString}
 
+					// Create an empty map to hold all the UUIDs
+					uuids := make(map[string]interface{})
+
 					// Loop through all ports and retrieve their info
 					for _, port := range ps.List() {
-						id, ok := uuids[port.(string)]
+						id, ok := rule["uuids"].(map[string]interface{})[port.(string)]
 						if !ok {
 							continue
 						}
@@ -392,7 +409,6 @@ func resourceCloudStackNetworkACLRuleRead(d *schema.ResourceData, meta interface
 						// Get the rule
 						r, ok := ruleMap[id.(string)]
 						if !ok {
-							delete(uuids, port.(string))
 							continue
 						}
 
@@ -407,16 +423,18 @@ func resourceCloudStackNetworkACLRuleRead(d *schema.ResourceData, meta interface
 
 						// Update the values
 						rule["action"] = strings.ToLower(r.Action)
+						rule["cidr_list"] = cidrs
 						rule["protocol"] = r.Protocol
 						rule["traffic_type"] = strings.ToLower(r.Traffictype)
-						rule["cidr_list"] = cidrs
 						ports.Add(port)
+						uuids[port.(string)] = id
 					}
 
 					// If there is at least one port found, add this rule to the rules set
 					if ports.Len() > 0 {
 						rule["ports"] = ports
-						rules.Add(rule)
+						rule["uuids"] = uuids
+						rules = append(rules, rule)
 					}
 				}
 			}
@@ -440,11 +458,11 @@ func resourceCloudStackNetworkACLRuleRead(d *schema.ResourceData, meta interface
 			}
 
 			// Add the dummy rule to the rules set
-			rules.Add(rule)
+			rules = append(rules, rule)
 		}
 	}
 
-	if rules.Len() > 0 {
+	if len(rules) > 0 {
 		d.Set("rule", rules)
 	} else if !managed {
 		d.SetId("")
@@ -462,18 +480,18 @@ func resourceCloudStackNetworkACLRuleUpdate(d *schema.ResourceData, meta interfa
 	// Check if the rule set as a whole has changed
 	if d.HasChange("rule") {
 		o, n := d.GetChange("rule")
-		ors := o.(*schema.Set).Difference(n.(*schema.Set))
-		nrs := n.(*schema.Set).Difference(o.(*schema.Set))
+		ors := difference(o.([]interface{}), n.([]interface{}))
+		nrs := difference(n.([]interface{}), o.([]interface{}))
 
-		// We need to start with a rule set containing all the rules we
+		// We need to start with a list containing all the rules we
 		// already have and want to keep. Any rules that are not deleted
 		// correctly and any newly created rules, will be added to this
-		// set to make sure we end up in a consistent state
-		rules := o.(*schema.Set).Intersection(n.(*schema.Set))
+		// list to make sure we end up in a consistent state
+		rules := intersection(o.([]interface{}), n.([]interface{}))
 
-		// First loop through all the new rules and create (before destroy) them
-		if nrs.Len() > 0 {
-			err := createNetworkACLRules(d, meta, rules, nrs)
+		// First loop over all the old rules and delete them
+		if len(ors) > 0 {
+			err := deleteNetworkACLRules(d, meta, &rules, ors)
 
 			// We need to update this first to preserve the correct state
 			d.Set("rule", rules)
@@ -483,9 +501,9 @@ func resourceCloudStackNetworkACLRuleUpdate(d *schema.ResourceData, meta interfa
 			}
 		}
 
-		// Then loop through all the old rules and delete them
-		if ors.Len() > 0 {
-			err := deleteNetworkACLRules(d, meta, rules, ors)
+		// Then loop over all the new rules and create them
+		if len(nrs) > 0 {
+			err := createNetworkACLRules(d, meta, &rules, nrs)
 
 			// We need to update this first to preserve the correct state
 			d.Set("rule", rules)
@@ -499,14 +517,45 @@ func resourceCloudStackNetworkACLRuleUpdate(d *schema.ResourceData, meta interfa
 	return resourceCloudStackNetworkACLRuleRead(d, meta)
 }
 
-func resourceCloudStackNetworkACLRuleDelete(d *schema.ResourceData, meta interface{}) error {
-	// Create an empty rule set to hold all rules that where
-	// not deleted correctly
-	rules := resourceCloudStackNetworkACLRule().Schema["rule"].ZeroValue().(*schema.Set)
+func difference(s1, s2 []interface{}) []interface{} {
+	rs := resourceCloudStackNetworkACLRule().Schema["rule"].Elem.(*schema.Resource)
+	hash := schema.HashResource(rs)
 
+	result := s1[:0]
+	for i, elem := range s1 {
+		if i < len(s2) {
+			if hash(elem) == hash(s2[i]) {
+				log.Printf("SVH8 NO MATCH:\n%#+v\n%#+v", elem, s2[i])
+				result = append(result, elem)
+			} else {
+				log.Printf("SVH8 MATCH:\n%#+v\n%#+v", elem, s2[i])
+			}
+		}
+	}
+	return result
+}
+
+func intersection(s1, s2 []interface{}) []interface{} {
+	result := s1[:0]
+	for i, elem := range s1 {
+		if i < len(s2) {
+			if reflect.DeepEqual(elem, s2[i]) {
+				result = append(result, elem)
+			}
+		}
+	}
+	// log.Printf("SVH9:\n%#+v\n%#+v\n%#+v", s1, s2, result)
+	return result
+
+}
+
+func resourceCloudStackNetworkACLRuleDelete(d *schema.ResourceData, meta interface{}) error {
 	// Delete all rules
-	if ors := d.Get("rule").(*schema.Set); ors.Len() > 0 {
-		err := deleteNetworkACLRules(d, meta, rules, ors)
+	if ors := d.Get("rule").([]interface{}); len(ors) > 0 {
+		// Create an empty list to hold all rules that where not deleted correctly
+		var rules []interface{}
+
+		err := deleteNetworkACLRules(d, meta, &rules, ors)
 
 		// We need to update this first to preserve the correct state
 		d.Set("rule", rules)
@@ -519,14 +568,14 @@ func resourceCloudStackNetworkACLRuleDelete(d *schema.ResourceData, meta interfa
 	return nil
 }
 
-func deleteNetworkACLRules(d *schema.ResourceData, meta interface{}, rules *schema.Set, ors *schema.Set) error {
+func deleteNetworkACLRules(d *schema.ResourceData, meta interface{}, rules *[]interface{}, ors []interface{}) error {
 	var errs *multierror.Error
 
 	var wg sync.WaitGroup
-	wg.Add(ors.Len())
+	wg.Add(len(ors))
 
 	sem := make(chan struct{}, d.Get("parallelism").(int))
-	for _, rule := range ors.List() {
+	for _, rule := range ors {
 		// Put a sleep here to avoid DoS'ing the API
 		time.Sleep(500 * time.Millisecond)
 
@@ -539,7 +588,7 @@ func deleteNetworkACLRules(d *schema.ResourceData, meta interface{}, rules *sche
 
 			// If we have at least one UUID, we need to save the rule
 			if len(rule["uuids"].(map[string]interface{})) > 0 {
-				rules.Add(rule)
+				*rules = append(*rules, rule)
 			}
 
 			if err != nil {
