@@ -18,6 +18,9 @@ func resourceCloudStackInstance() *schema.Resource {
 		Read:   resourceCloudStackInstanceRead,
 		Update: resourceCloudStackInstanceUpdate,
 		Delete: resourceCloudStackInstanceDelete,
+		Importer: &schema.ResourceImporter{
+			State: resourceCloudStackInstanceImport,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"name": &schema.Schema{
@@ -607,6 +610,85 @@ func resourceCloudStackInstanceDelete(d *schema.ResourceData, meta interface{}) 
 	}
 
 	return nil
+}
+
+func resourceCloudStackInstanceImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	cs := meta.(*cloudstack.CloudStackClient)
+	name := d.Id()
+
+	log.Printf("[DEBUG] looking for instance with name %s", name)
+
+	// Get the virtual machine details
+	vm, count, err := cs.VirtualMachine.GetVirtualMachineByName(
+		name,
+		cloudstack.WithProject(d.Get("project").(string)),
+	)
+	if err != nil {
+		if count == 0 {
+			return nil, fmt.Errorf("instance %s does not exist", name)
+		}
+		return nil, err
+	}
+
+	d.SetId(vm.Id)
+	d.Set("name", vm.Name)
+	d.Set("display_name", vm.Displayname)
+
+	if len(vm.Nic) > 0 {
+		nic := vm.Nic[0]
+		d.Set("network_id", nic.Networkid)
+		d.Set("ip_address", nic.Ipaddress)
+	}
+
+	// Create a new param struct.
+	p := cs.Volume.NewListVolumesParams()
+	p.SetType("ROOT")
+	p.SetVirtualmachineid(vm.Id)
+
+	// Get the root disk of the instance.
+	l, err := cs.Volume.ListVolumes(p)
+	if err != nil {
+		return nil, err
+	}
+
+	// If we found the root disk, then update its size.
+	if len(l.Volumes) != 1 {
+		return nil, fmt.Errorf("[DEBUG] Failed to find root disk of instance: %s", vm.Name)
+	} else {
+		d.Set("root_disk_size", l.Volumes[0].Size>>30) // B to GiB
+	}
+
+	setValueOrID(d, "group", vm.Group, vm.Groupid)
+
+	affinityGroups := &schema.Set{F: schema.HashString}
+	for _, group := range vm.Affinitygroup {
+		affinityGroups.Add(group.Id)
+	}
+	d.Set("affinity_group_ids", affinityGroups)
+
+	securityGroups := &schema.Set{F: schema.HashString}
+	for _, group := range vm.Securitygroup {
+		securityGroups.Add(group.Id)
+	}
+	d.Set("security_group_ids", securityGroups)
+
+	tags := make(map[string]interface{})
+	for _, tag := range vm.Tags {
+		tags[tag.Key] = tag.Value
+	}
+	d.Set("tags", tags)
+
+	setValueOrID(d, "service_offering", vm.Serviceofferingname, vm.Serviceofferingid)
+	setValueOrID(d, "template", vm.Templatename, vm.Templateid)
+	setValueOrID(d, "project", vm.Project, vm.Projectid)
+	setValueOrID(d, "zone", vm.Zonename, vm.Zoneid)
+	d.Set("keypair", vm.Keypair)
+	d.Set("hostname", vm.Hostname)
+	d.Set("expunge", false)
+
+	log.Printf("[INFO] Imported instance %s: %#v", name, d)
+
+	return []*schema.ResourceData{d}, nil
 }
 
 // getUserData returns the user data as a base64 encoded string
