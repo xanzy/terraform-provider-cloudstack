@@ -14,7 +14,9 @@ func resourceCloudStackSecurityGroup() *schema.Resource {
 		Create: resourceCloudStackSecurityGroupCreate,
 		Read:   resourceCloudStackSecurityGroupRead,
 		Delete: resourceCloudStackSecurityGroupDelete,
-
+		Importer: &schema.ResourceImporter{
+			State: resourceCloudStackSecurityGroupImport,
+		},
 		Schema: map[string]*schema.Schema{
 			"name": &schema.Schema{
 				Type:     schema.TypeString,
@@ -122,4 +124,33 @@ func resourceCloudStackSecurityGroupDelete(d *schema.ResourceData, meta interfac
 	}
 
 	return nil
+}
+
+func resourceCloudStackSecurityGroupImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	cs := meta.(*cloudstack.CloudStackClient)
+	name := d.Id()
+
+	// Get the security group details
+	sg, count, err := cs.SecurityGroup.GetSecurityGroupByName(
+		name,
+		cloudstack.WithProject(d.Get("project").(string)),
+	)
+	if err != nil {
+		if count == 0 {
+			return nil, fmt.Errorf("security group %s does not exist", name)
+		}
+		return nil, err
+	}
+
+	// Update the config
+	d.SetId(sg.Id)
+	d.Set("name", sg.Name)
+	d.Set("description", sg.Description)
+
+	setValueOrID(d, "project", sg.Project, sg.Projectid)
+
+	log.Printf("[INFO] Imported security group %s: %#v", name, d)
+
+	rules := resourceCloudStackSecurityGroupRuleImport(sg)
+	return append([]*schema.ResourceData{d}, rules...), nil
 }

@@ -470,7 +470,7 @@ func resourceCloudStackSecurityGroupRuleUpdate(d *schema.ResourceData, meta inte
 			}
 		}
 
-		// Then loop through all the new rules and delete them
+		// Then loop through all the new rules and create them
 		if nrs.Len() > 0 {
 			err := createSecurityGroupRules(d, meta, rules, nrs)
 
@@ -628,4 +628,72 @@ func verifySecurityGroupRuleParams(d *schema.ResourceData, rule map[string]inter
 	}
 
 	return nil
+}
+
+func resourceCloudStackSecurityGroupRuleImport(sg *cloudstack.SecurityGroup) []*schema.ResourceData {
+	ruleResource := resourceCloudStackSecurityGroupRule()
+	data := ruleResource.Data(nil)
+	data.SetId(sg.Id)
+	data.SetType("cloudstack_security_group_rule")
+	data.Set("security_group_id", sg.Id)
+	data.Set("parallelism", 2)
+	if sg.Projectid != "" {
+		data.Set("project_id", sg.Projectid)
+	}
+	rules := ruleResource.Schema["rule"].ZeroValue().(*schema.Set)
+	for idx, sgRule := range append(sg.Ingressrule, sg.Egressrule...) {
+		rule := make(map[string]interface{}, 1)
+		if idx < len(sg.Ingressrule) {
+			rule["traffic_type"] = "ingress"
+		} else {
+			rule["traffic_type"] = "egress"
+		}
+		rule["protocol"] = sgRule.Protocol
+
+		if sgRule.Securitygroupname != "" {
+			rule["user_security_group_list"].(*schema.Set).Add(sgRule.Securitygroupname)
+		}
+
+		if sgRule.Cidr != "" {
+			cidrs := &schema.Set{F: schema.HashString}
+			for _, cidr := range strings.Split(sgRule.Cidr, ",") {
+				cidrs.Add(cidr)
+			}
+			rule["cidr_list"] = cidrs
+		}
+
+		uuids := make(map[string]interface{})
+		if sgRule.Protocol == "icmp" {
+			rule["icmp_type"] = sgRule.Icmptype
+			rule["icmp_code"] = sgRule.Icmpcode
+
+			for _, cidr := range strings.Split(sgRule.Cidr, ",") {
+				uuids[cidr+"icmp"] = sgRule.Ruleid
+			}
+		}
+		if sgRule.Protocol == "tcp" || sgRule.Protocol == "udp" {
+			portEntry := strconv.Itoa(sgRule.Startport)
+			if sgRule.Endport != sgRule.Startport {
+				portEntry = fmt.Sprintf("%d-%d", sgRule.Startport, sgRule.Endport)
+			}
+
+			ports := &schema.Set{F: schema.HashString}
+			ports.Add(portEntry)
+			rule["ports"] = ports
+
+			for _, cidr := range strings.Split(sgRule.Cidr, ",") {
+				uuids[cidr+portEntry] = sgRule.Ruleid
+			}
+		}
+
+		if len(uuids) > 0 {
+			rule["uuids"] = uuids
+		}
+		rules.Add(rule)
+	}
+	data.Set("rule", rules)
+
+	log.Printf("[INFO] Imported security group rule %s: %#v", sg.Id, data)
+
+	return []*schema.ResourceData{data}
 }
