@@ -470,7 +470,7 @@ func resourceCloudStackSecurityGroupRuleUpdate(d *schema.ResourceData, meta inte
 			}
 		}
 
-		// Then loop through all the new rules and create them
+		// Then loop through all the new rules and delete them
 		if nrs.Len() > 0 {
 			err := createSecurityGroupRules(d, meta, rules, nrs)
 

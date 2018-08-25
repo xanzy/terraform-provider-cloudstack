@@ -14,6 +14,9 @@ func resourceCloudStackSSHKeyPair() *schema.Resource {
 		Create: resourceCloudStackSSHKeyPairCreate,
 		Read:   resourceCloudStackSSHKeyPairRead,
 		Delete: resourceCloudStackSSHKeyPairDelete,
+		Importer: &schema.ResourceImporter{
+			State: resourceCloudStackSSHKeyPairImport,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"name": &schema.Schema{
@@ -142,4 +145,36 @@ func resourceCloudStackSSHKeyPairDelete(d *schema.ResourceData, meta interface{}
 	}
 
 	return nil
+}
+
+func resourceCloudStackSSHKeyPairImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	cs := meta.(*cloudstack.CloudStackClient)
+	name := d.Id()
+
+	log.Printf("[DEBUG] looking for key pair with name %s", name)
+
+	p := cs.SSH.NewListSSHKeyPairsParams()
+	p.SetName(name)
+
+	// If there is a project supplied, we retrieve and set the project id
+	if err := setProjectid(p, cs, d); err != nil {
+		return nil, err
+	}
+
+	r, err := cs.SSH.ListSSHKeyPairs(p)
+	if err != nil {
+		return nil, err
+	}
+
+	if r.Count == 0 {
+		return nil, fmt.Errorf("key pair %s does not exist", name)
+	}
+
+	//SSHKeyPair name is unique in a cloudstack account so dont need to check for multiple
+	d.Set("name", r.SSHKeyPairs[0].Name)
+	d.Set("fingerprint", r.SSHKeyPairs[0].Fingerprint)
+
+	log.Printf("[INFO] Imported key pair %s: %#v", name, d)
+
+	return []*schema.ResourceData{d}, nil
 }
