@@ -1,4 +1,12 @@
 ## 0.1.6 (Unreleased)
+IMPROVEMENTS:
+
+* `r/cloudstack_instance`: Add user_data_base64
+
+BUG FIXES:
+
+* `r/cloudstack_instance`: Removing user_data from an instance resulted in an error
+
 ## 0.1.5 (April 27, 2018)
 
 IMPROVEMENTS:

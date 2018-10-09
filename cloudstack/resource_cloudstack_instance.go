@@ -123,8 +123,9 @@ func resourceCloudStackInstance() *schema.Resource {
 			},
 
 			"user_data": &schema.Schema{
-				Type:     schema.TypeString,
-				Optional: true,
+				Type:          schema.TypeString,
+				Optional:      true,
+				ConflictsWith: []string{"user_data_base64"},
 				StateFunc: func(v interface{}) string {
 					switch v.(type) {
 					case string:
@@ -133,6 +134,23 @@ func resourceCloudStackInstance() *schema.Resource {
 					default:
 						return ""
 					}
+				},
+			},
+
+			"user_data_base64": &schema.Schema{
+				Type:          schema.TypeString,
+				Optional:      true,
+				ConflictsWith: []string{"user_data"},
+				StateFunc: func(v interface{}) string {
+					return fmt.Sprintf("%x", sha1.Sum([]byte(v.(string))))
+				},
+				ValidateFunc: func(v interface{}, name string) (warns []string, errs []error) {
+					if _, err := base64.StdEncoding.DecodeString(v.(string)); err != nil {
+						errs = append(errs, fmt.Errorf(
+							"%s: must be base64-encoded", name,
+						))
+					}
+					return
 				},
 			},
 
@@ -256,12 +274,9 @@ func resourceCloudStackInstanceCreate(d *schema.ResourceData, meta interface{}) 
 		p.SetKeypair(keypair.(string))
 	}
 
-	if userData, ok := d.GetOk("user_data"); ok {
-		ud, err := getUserData(userData.(string), cs.HTTPGETOnly)
-		if err != nil {
-			return err
-		}
-
+	if ud, err := getUserData(d, cs.HTTPGETOnly); err != nil {
+		return err
+	} else {
 		p.SetUserdata(ud)
 	}
 
@@ -430,7 +445,8 @@ func resourceCloudStackInstanceUpdate(d *schema.ResourceData, meta interface{}) 
 
 	// Attributes that require reboot to update
 	if d.HasChange("name") || d.HasChange("service_offering") || d.HasChange("affinity_group_ids") ||
-		d.HasChange("affinity_group_names") || d.HasChange("keypair") || d.HasChange("user_data") {
+		d.HasChange("affinity_group_names") || d.HasChange("keypair") || d.HasChange("user_data") ||
+		d.HasChange("user_data_base64") {
 		// Before we can actually make these changes, the virtual machine must be stopped
 		_, err := cs.VirtualMachine.StopVirtualMachine(
 			cs.VirtualMachine.NewStopVirtualMachineParams(d.Id()))
@@ -543,22 +559,30 @@ func resourceCloudStackInstanceUpdate(d *schema.ResourceData, meta interface{}) 
 		}
 
 		// Check if the user data has changed and if so, update the user data
-		if d.HasChange("user_data") {
+		if d.HasChange("user_data") || d.HasChange("user_data_base64") {
 			log.Printf("[DEBUG] user_data changed for %s, starting update", name)
 
-			ud, err := getUserData(d.Get("user_data").(string), cs.HTTPGETOnly)
-			if err != nil {
+			p := cs.VirtualMachine.NewUpdateVirtualMachineParams(d.Id())
+
+			if ud, err := getUserData(d, cs.HTTPGETOnly); err != nil {
 				return err
+			} else {
+				p.SetUserdata(ud)
 			}
 
-			p := cs.VirtualMachine.NewUpdateVirtualMachineParams(d.Id())
-			p.SetUserdata(ud)
 			_, err = cs.VirtualMachine.UpdateVirtualMachine(p)
 			if err != nil {
 				return fmt.Errorf(
 					"Error updating user_data for instance %s: %s", name, err)
 			}
-			d.SetPartial("user_data")
+
+			if d.HasChange("user_data") {
+				d.SetPartial("user_data")
+			}
+
+			if d.HasChange("user_data_base64") {
+				d.SetPartial("user_data_base64")
+			}
 		}
 
 		// Start the virtual machine again
@@ -610,8 +634,18 @@ func resourceCloudStackInstanceDelete(d *schema.ResourceData, meta interface{}) 
 }
 
 // getUserData returns the user data as a base64 encoded string
-func getUserData(userData string, httpGetOnly bool) (string, error) {
-	ud := base64.StdEncoding.EncodeToString([]byte(userData))
+// If no user_data has been specified a blank line is returned.
+func getUserData(d *schema.ResourceData, httpGetOnly bool) (string, error) {
+	var ud string
+	if v, ok := d.GetOk("user_data"); ok {
+		ud = base64.StdEncoding.EncodeToString([]byte(v.(string)))
+	} else {
+		if v, ok = d.GetOk("user_data_base64"); ok {
+			ud = v.(string)
+		} else {
+			return "Cg==", nil // blank line base64 encoded
+		}
+	}
 
 	// deployVirtualMachine uses POST by default, so max userdata is 32K
 	maxUD := 32768

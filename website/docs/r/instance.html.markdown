@@ -70,6 +70,12 @@ The following arguments are supported:
 * `user_data` - (Optional) The user data to provide when launching the
     instance.
 
+* `user_data_base64` - (Optional) Can be used instead of `user_data`
+    to pass base64-encoded binary data directly. Use this instead of
+    `user_data` whenever the value is not a valid UTF-8 string. For
+    example, gzip-encoded user data must be base64-encoded and passed via
+    this argument.
+
 * `keypair` - (Optional) The name of the SSH key pair that will be used to
     access this instance.
 
