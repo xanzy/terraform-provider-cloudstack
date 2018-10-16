@@ -14,6 +14,9 @@ func resourceCloudStackVPNConnection() *schema.Resource {
 		Create: resourceCloudStackVPNConnectionCreate,
 		Read:   resourceCloudStackVPNConnectionRead,
 		Delete: resourceCloudStackVPNConnectionDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"customer_gateway_id": &schema.Schema{

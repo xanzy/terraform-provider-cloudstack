@@ -30,6 +30,9 @@ func resourceCloudStackSecurityGroupRule() *schema.Resource {
 		Read:   resourceCloudStackSecurityGroupRuleRead,
 		Update: resourceCloudStackSecurityGroupRuleUpdate,
 		Delete: resourceCloudStackSecurityGroupRuleDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"security_group_id": &schema.Schema{

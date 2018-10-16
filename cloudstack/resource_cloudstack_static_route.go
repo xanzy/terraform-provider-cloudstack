@@ -14,6 +14,9 @@ func resourceCloudStackStaticRoute() *schema.Resource {
 		Create: resourceCloudStackStaticRouteCreate,
 		Read:   resourceCloudStackStaticRouteRead,
 		Delete: resourceCloudStackStaticRouteDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"cidr": &schema.Schema{

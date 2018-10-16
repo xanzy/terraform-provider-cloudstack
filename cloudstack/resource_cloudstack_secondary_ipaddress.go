@@ -14,6 +14,9 @@ func resourceCloudStackSecondaryIPAddress() *schema.Resource {
 		Create: resourceCloudStackSecondaryIPAddressCreate,
 		Read:   resourceCloudStackSecondaryIPAddressRead,
 		Delete: resourceCloudStackSecondaryIPAddressDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"ip_address": &schema.Schema{

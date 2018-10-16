@@ -15,6 +15,9 @@ func resourceCloudStackLoadBalancerRule() *schema.Resource {
 		Read:   resourceCloudStackLoadBalancerRuleRead,
 		Update: resourceCloudStackLoadBalancerRuleUpdate,
 		Delete: resourceCloudStackLoadBalancerRuleDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"name": &schema.Schema{

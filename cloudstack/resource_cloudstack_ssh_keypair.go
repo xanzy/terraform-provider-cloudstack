@@ -14,6 +14,9 @@ func resourceCloudStackSSHKeyPair() *schema.Resource {
 		Create: resourceCloudStackSSHKeyPairCreate,
 		Read:   resourceCloudStackSSHKeyPairRead,
 		Delete: resourceCloudStackSSHKeyPairDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"name": &schema.Schema{

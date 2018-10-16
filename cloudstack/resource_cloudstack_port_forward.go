@@ -19,6 +19,9 @@ func resourceCloudStackPortForward() *schema.Resource {
 		Read:   resourceCloudStackPortForwardRead,
 		Update: resourceCloudStackPortForwardUpdate,
 		Delete: resourceCloudStackPortForwardDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"ip_address_id": &schema.Schema{

@@ -15,6 +15,9 @@ func resourceCloudStackStaticNAT() *schema.Resource {
 		Exists: resourceCloudStackStaticNATExists,
 		Read:   resourceCloudStackStaticNATRead,
 		Delete: resourceCloudStackStaticNATDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"ip_address_id": &schema.Schema{

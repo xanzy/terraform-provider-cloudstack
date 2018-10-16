@@ -18,6 +18,9 @@ func resourceCloudStackEgressFirewall() *schema.Resource {
 		Read:   resourceCloudStackEgressFirewallRead,
 		Update: resourceCloudStackEgressFirewallUpdate,
 		Delete: resourceCloudStackEgressFirewallDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"network_id": &schema.Schema{

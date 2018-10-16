@@ -18,6 +18,9 @@ func resourceCloudStackFirewall() *schema.Resource {
 		Read:   resourceCloudStackFirewallRead,
 		Update: resourceCloudStackFirewallUpdate,
 		Delete: resourceCloudStackFirewallDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"ip_address_id": &schema.Schema{
