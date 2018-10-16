@@ -19,6 +19,9 @@ func resourceCloudStackNetworkACLRule() *schema.Resource {
 		Read:   resourceCloudStackNetworkACLRuleRead,
 		Update: resourceCloudStackNetworkACLRuleUpdate,
 		Delete: resourceCloudStackNetworkACLRuleDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"acl_id": &schema.Schema{
