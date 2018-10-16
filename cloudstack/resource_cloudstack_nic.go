@@ -14,6 +14,9 @@ func resourceCloudStackNIC() *schema.Resource {
 		Create: resourceCloudStackNICCreate,
 		Read:   resourceCloudStackNICRead,
 		Delete: resourceCloudStackNICDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"network_id": &schema.Schema{
