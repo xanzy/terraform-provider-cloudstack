@@ -46,7 +46,7 @@ The `rule` block supports:
 * `cidr_list` - (Required) A CIDR list to allow access to the given ports.
 
 * `protocol` - (Required) The name of the protocol to allow. Valid options are:
-    `tcp`, `udp` and `icmp`.
+    `tcp`, `udp` and `icmp`. To allow all protocols use `-1`.
 
 * `icmp_type` - (Optional) The ICMP type to allow. This can only be specified if
     the protocol is ICMP.
