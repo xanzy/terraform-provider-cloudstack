@@ -87,6 +87,7 @@ func Provider() terraform.ResourceProvider {
 			"cloudstack_vpn_connection":       resourceCloudStackVPNConnection(),
 			"cloudstack_vpn_customer_gateway": resourceCloudStackVPNCustomerGateway(),
 			"cloudstack_vpn_gateway":          resourceCloudStackVPNGateway(),
+			"cloudstack_project":              resourceCloudStackProject(),
 		},
 
 		ConfigureFunc: providerConfigure,
