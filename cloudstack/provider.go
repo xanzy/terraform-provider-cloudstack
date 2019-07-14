@@ -76,6 +76,7 @@ func Provider() terraform.ResourceProvider {
 			"cloudstack_nic":                  resourceCloudStackNIC(),
 			"cloudstack_port_forward":         resourceCloudStackPortForward(),
 			"cloudstack_private_gateway":      resourceCloudStackPrivateGateway(),
+			"cloudstack_project":              resourceCloudStackProject(),
 			"cloudstack_secondary_ipaddress":  resourceCloudStackSecondaryIPAddress(),
 			"cloudstack_security_group":       resourceCloudStackSecurityGroup(),
 			"cloudstack_security_group_rule":  resourceCloudStackSecurityGroupRule(),
@@ -87,7 +88,6 @@ func Provider() terraform.ResourceProvider {
 			"cloudstack_vpn_connection":       resourceCloudStackVPNConnection(),
 			"cloudstack_vpn_customer_gateway": resourceCloudStackVPNCustomerGateway(),
 			"cloudstack_vpn_gateway":          resourceCloudStackVPNGateway(),
-			"cloudstack_project":              resourceCloudStackProject(),
 		},
 
 		ConfigureFunc: providerConfigure,

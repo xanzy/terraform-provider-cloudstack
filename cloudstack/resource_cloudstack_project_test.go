@@ -10,7 +10,6 @@ import (
 )
 
 func TestAccCloudStackProject_basic(t *testing.T) {
-	t.Skip()
 	var project cloudstack.Project
 
 	resource.Test(t, resource.TestCase{
@@ -61,7 +60,11 @@ func testAccCheckCloudStackProjectExists(
 		}
 
 		cs := testAccProvider.Meta().(*cloudstack.CloudStackClient)
-		p, _, err := cs.Project.GetProjectByID(rs.Primary.ID, cloudstack.WithDomain(rs.Primary.Attributes["domainid"]))
+
+		p, _, err := cs.Project.GetProjectByID(
+			rs.Primary.ID,
+			cloudstack.WithDomain(rs.Primary.Attributes["domain_id"]),
+		)
 		if err != nil {
 			return err
 		}

@@ -27,22 +27,20 @@ The following arguments are supported:
 
 * `name` - (Required) The name of the Project.
 
-* `display_text` - (Required) The display text of the Project.
+* `display_text` - (Optional) The display text of the Project. Defaults to the name
+  of the project.
 
-* `account` - (Optional) The name of the Account to use for this Project. Changing this forces a new
-    resource to be created.
+* `account` - (Optional) The name of the Account to use for this Project. Changing
+  this forces a new resource to be created.
 
-* `domainid` - (Optional) The name or ID of the Domain to use for this Project.
-    Changing this forces a new resource to be created.
+* `domain_id` - (Optional) The name or ID of the Domain to use for this Project.
+  Changing this forces a new resource to be created.
 
 ## Attributes Reference
 
 The following attributes are exported:
 
 * `id` - The ID of the Project.
-* `display_text` - The display text of the Project.
-* `domainid` - The Domain ID of the Project.
-* `account` - The Account name of the Project.
 
 ## Import
 

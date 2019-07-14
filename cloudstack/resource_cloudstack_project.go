@@ -5,7 +5,6 @@ import (
 	"log"
 	"strings"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/xanzy/go-cloudstack/cloudstack"
 )
@@ -29,7 +28,7 @@ func resourceCloudStackProject() *schema.Resource {
 
 			"display_text": {
 				Type:     schema.TypeString,
-				Required: true,
+				Optional: true,
 			},
 
 			"account": {
@@ -39,7 +38,7 @@ func resourceCloudStackProject() *schema.Resource {
 				ForceNew: true,
 			},
 
-			"domainid": {
+			"domain_id": {
 				Type:     schema.TypeString,
 				Optional: true,
 				Computed: true,
@@ -52,9 +51,9 @@ func resourceCloudStackProject() *schema.Resource {
 }
 
 func resourceCloudStackProjectCreate(d *schema.ResourceData, meta interface{}) error {
-	spew.Dump("create")
 	cs := meta.(*cloudstack.CloudStackClient)
 
+	// Get the name from the config
 	name := d.Get("name").(string)
 
 	// Set the display text
@@ -69,16 +68,16 @@ func resourceCloudStackProjectCreate(d *schema.ResourceData, meta interface{}) e
 		name,
 	)
 
-	// If there is a domain id supplied, make sure to add it to the request
-	if domainid, ok := d.GetOk("domainid"); ok {
-		// Set the domain id
-		p.SetDomainid(domainid.(string))
-	}
-
 	// If there is a account supplied, make sure to add it to the request
 	if account, ok := d.GetOk("account"); ok {
 		// Set the account
 		p.SetAccount(account.(string))
+	}
+
+	// If there is a domain id supplied, make sure to add it to the request
+	if domainid, ok := d.GetOk("domain_id"); ok {
+		// Set the domain id
+		p.SetDomainid(domainid.(string))
 	}
 
 	// Create the new project
@@ -103,9 +102,8 @@ func resourceCloudStackProjectRead(d *schema.ResourceData, meta interface{}) err
 
 	p, count, err := cs.Project.GetProjectByID(
 		d.Id(),
-		cloudstack.WithDomain(d.Get("domainid").(string)),
+		cloudstack.WithDomain(d.Get("domain_id").(string)),
 	)
-
 	if err != nil {
 		if count == 0 {
 			log.Printf(
@@ -120,7 +118,7 @@ func resourceCloudStackProjectRead(d *schema.ResourceData, meta interface{}) err
 	d.Set("name", p.Name)
 	d.Set("display_text", p.Displaytext)
 	d.Set("account", p.Account)
-	d.Set("domainid", p.Domainid)
+	d.Set("domain_id", p.Domainid)
 
 	tags := make(map[string]interface{})
 	for _, tag := range p.Tags {
@@ -175,6 +173,7 @@ func resourceCloudStackProjectDelete(d *schema.ResourceData, meta interface{}) e
 
 	// Create a new parameter struct
 	p := cs.Project.NewDeleteProjectParams(d.Id())
+
 	// Delete the Project
 	_, err := cs.Project.DeleteProject(p)
 	if err != nil {
@@ -187,5 +186,6 @@ func resourceCloudStackProjectDelete(d *schema.ResourceData, meta interface{}) e
 
 		return fmt.Errorf("Error deleting Project %s: %s", d.Get("name").(string), err)
 	}
+
 	return nil
 }
