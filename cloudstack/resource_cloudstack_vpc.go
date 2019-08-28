@@ -62,6 +62,11 @@ func resourceCloudStackVPC() *schema.Resource {
 				Computed: true,
 			},
 
+			"source_nat_ip_id": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+
 			"zone": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -191,6 +196,7 @@ func resourceCloudStackVPCRead(d *schema.ResourceData, meta interface{}) error {
 
 	if l.Count == 1 {
 		d.Set("source_nat_ip", l.PublicIpAddresses[0].Ipaddress)
+		d.Set("source_nat_ip_id", l.PublicIpAddresses[0].Id)
 	}
 
 	return nil
