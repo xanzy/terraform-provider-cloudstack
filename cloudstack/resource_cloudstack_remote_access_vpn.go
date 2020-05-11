@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	// "time"
+	"time"
 
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/xanzy/go-cloudstack/cloudstack"
@@ -93,16 +93,16 @@ func resourceCloudStackRemoteAccessVPNCreate(d *schema.ResourceData, meta interf
 
 	log.Printf("[DEBUG] Remote Access VPN created: %+v", v)
 
-	for i := 0, i < 12; i++ {
-		_, count, err := cs.GetRemoteAccessVpnByID(v.Id)
+	for i := 0; i < 12; i++ {
+		_, count, err := cs.VPN.GetRemoteAccessVpnByID(v.Id)
 		if err != nil {
 			if count == 0 {
 				time.Sleep(5 * time.Second)
 				continue
 			}
-			return fmt.Error("Error looking for newly created Remote Access VPN for Public IP %s: %s", publicipid, err)
+			return fmt.Errorf("Error looking for newly created Remote Access VPN for Public IP %s: %s", publicipid, err)
 		}
-        }
+	}
 
 	d.SetId(v.Id)
 
