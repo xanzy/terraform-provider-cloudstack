@@ -60,6 +60,7 @@ func Provider() terraform.ResourceProvider {
 
 		DataSourcesMap: map[string]*schema.Resource{
 			"cloudstack_template": dataSourceCloudstackTemplate(),
+			"cloudstack_network":  dataSourceCloudstackNetwork(),
 		},
 
 		ResourcesMap: map[string]*schema.Resource{

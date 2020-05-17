@@ -1,10 +1,8 @@
 package cloudstack
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
-	"regexp"
 	"time"
 
 	"github.com/hashicorp/terraform/helper/schema"
@@ -84,7 +82,7 @@ func dataSourceCloudstackTemplateRead(d *schema.ResourceData, meta interface{}) 
 	var templates []*cloudstack.Template
 
 	for _, t := range csTemplates.Templates {
-		match, err := applyFilters(t, filters.(*schema.Set))
+		match, err := applyObjectFilters(t, filters.(*schema.Set))
 		if err != nil {
 			return err
 		}
@@ -144,27 +142,4 @@ func latestTemplate(templates []*cloudstack.Template) (*cloudstack.Template, err
 	}
 
 	return template, nil
-}
-
-func applyFilters(template *cloudstack.Template, filters *schema.Set) (bool, error) {
-	var templateJSON map[string]interface{}
-	t, _ := json.Marshal(template)
-	json.Unmarshal(t, &templateJSON)
-
-	for _, f := range filters.List() {
-		m := f.(map[string]interface{})
-
-		r, err := regexp.Compile(m["value"].(string))
-		if err != nil {
-			return false, fmt.Errorf("Invalid regex: %s", err)
-		}
-
-		templateField := templateJSON[m["name"].(string)].(string)
-		if !r.MatchString(templateField) {
-			return false, nil
-		}
-
-	}
-
-	return true, nil
 }
