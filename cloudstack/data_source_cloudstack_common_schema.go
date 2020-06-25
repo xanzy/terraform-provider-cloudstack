@@ -1,7 +1,7 @@
 package cloudstack
 
 import (
-	"github.com/hashicorp/terraform/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
 func dataSourceFiltersSchema() *schema.Schema {
