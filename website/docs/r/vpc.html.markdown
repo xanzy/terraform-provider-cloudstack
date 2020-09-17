@@ -40,7 +40,7 @@ The following arguments are supported:
 * `network_domain` - (Optional) The default DNS domain for networks created in
     this VPC. Changing this forces a new resource to be created.
 
-* `project` - (Optional) The name or ID of the project to deploy this
+* `project` - (Required) The name or ID of the project to deploy this
     instance to. Changing this forces a new resource to be created.
 
 * `zone` - (Required) The name or ID of the zone where this disk volume will be
